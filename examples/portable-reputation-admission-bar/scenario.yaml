@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: Apache-2.0
+# Experiment variant of `scenarios/parc_migration.yaml`.
+#
+# ONE setting changed from the baseline:
+#     task.config.min_reputation_score: 0.2  ->  0.70
+#
+# Everything else -- seed, agents, layers, failures, duration -- is byte-for-byte
+# the baseline. The question: where should a platform set the minimum imported
+# reputation score it will accept at the door?
+#
+# Baseline (0.2): 4/4 honest admitted, 0/6 fraudulent admitted, 6/6 validators PASS.
+# This file  (0.70): 0/4 honest admitted, 0/6 fraudulent admitted, 4/6 validators PASS
+#   (`parc_honest_admitted` fails -- the whole honest supply is turned away, and
+#    `parc_ring_severed` fails -- the wash ring is now denied for the generic
+#    reason `below_threshold` instead of the collusion verdict
+#    `severed_below_threshold`, because the threshold check short-circuits the
+#    whole-graph severance analysis.)
+#
+# See README.md for the full sweep, the cliff at 1 - 1/e, and the investigation.
+name: parc_migration_admission_bar
+description: "10 migrants (4 honest, 3-ring, forger, replayer, stale-key, inflated), 2 issuers, 1 gate."
+
+tier: 1
+seed: 42
+
+agents:
+  # 4 honest + 3 ring + forger + replayer + stale + inflated + 2 auditors + 1 gate = 13
+  count: 13
+  brain: state-machine
+
+layers:
+  transport: in_memory
+  comms: nest_native
+  # The cross-layer composition: credentials are signed through the rotating
+  # identity layer and verified against genuine key-rotation windows.
+  identity: ed25519_rotating
+  registry: in_memory
+  auth: jwt
+  # The whole point: parc exports portable credentials and recomputes them at
+  # admission. Switch to `score_average` to watch every validator fail.
+  trust: parc
+  payments: prepaid_credits
+  coordination: contract_net
+  negotiation: alternating_offers
+  memory: blackboard
+  privacy: noop
+  datafacts: datafacts_v1
+
+task:
+  type: parc_migration
+  config:
+    min_reputation_score: 0.70
+    naive_gate: false
+
+failures:
+  message_drop: 0.0
+
+duration: "ticks: 10000"
+
+metrics:
+  - success_rate
+  - message_count
+  - agent_count
+
+output:
+  trace: ./traces/parc_migration_admission_bar.jsonl
